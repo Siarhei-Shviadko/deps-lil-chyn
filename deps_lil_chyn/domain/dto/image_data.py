@@ -61,12 +61,13 @@ class ImageData:
         image: Image.Image,
         extension: ImageExtension = ImageExtension.PNG,
     ) -> "ImageData":
-        img = image.convert("RGB")
+        rgb_image = image.convert("RGB")
+        rgb_array = np.asarray(rgb_image, dtype=np.uint8)
+        bgr_array = cv2.cvtColor(rgb_array, cv2.COLOR_RGB2BGR)
+        rgb_image.close()
+        del rgb_array, rgb_image
 
-        return cls.from_ndarray(
-            array=cv2.cvtColor(np.array(img, dtype=np.uint8), cv2.COLOR_RGB2BGR),
-            extension=extension,
-        )
+        return cls.from_ndarray(array=bgr_array, extension=extension)
 
     @classmethod
     def from_docx_image(

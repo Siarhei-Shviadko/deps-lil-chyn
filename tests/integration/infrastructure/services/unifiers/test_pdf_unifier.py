@@ -1,4 +1,3 @@
-from unittest.mock import patch
 from uuid import uuid4
 
 
@@ -17,11 +16,7 @@ def test_pdf_unifier(pdf_unifier, fake_storage_service):
         with open(file_path, "r+b") as f:
             fake_storage_service.upload(path=file_path, content=f.read(), replace_if_exists=True)
 
-    with patch(
-        "deps_lil_chyn.infrastructure.services.unifiers.pdf.make_object_storage",
-        return_value=fake_storage_service,
-    ):
-        unified_data = pdf_unifier.unify(document_id=document_id, files=files)
+    unified_data = pdf_unifier.unify(document_id=document_id, files=files)
 
     assert len(unified_data.images) == pages_number
     assert len(unified_data.positional_texts) == pages_with_positional_text_number
