@@ -1,18 +1,16 @@
+import concurrent.futures
 import logging
-import multiprocessing
-from dataclasses import dataclass
 from io import BytesIO
-from multiprocessing import Process, Queue
-from queue import Empty
 from typing import Any
 
-from deps_object_storage import ObjectStorage, make_object_storage
+from deps_object_storage import ObjectStorage
 from deps_unified_data.model import Bbox, UnifiedData, UnifiedDataFactory, WordBox
 
 from deps_lil_chyn.constants import DEFAULT_PDF_MAX_PROCESSES, DEFAULT_TARGET_DPI
 from deps_lil_chyn.domain.dto import FileData, ImageData
 from deps_lil_chyn.domain.services import PdfToImagesConverter, VectorPdfExtractor
 from deps_lil_chyn.domain.services.vector_pdf_extractor import Page
+from deps_lil_chyn.infrastructure.access_management import user
 
 from .abstract_unifier import AbstractUnifier
 
@@ -22,14 +20,6 @@ Confidence = float
 Content = str
 
 __all__ = ["PdfUnifier"]
-
-
-@dataclass
-class PageTask:
-    page_index: int
-    image_data: ImageData
-    wordboxes: list[WordBox]
-    file_name: str
 
 
 class PdfUnifier(AbstractUnifier):
@@ -78,83 +68,60 @@ class PdfUnifier(AbstractUnifier):
         file_data: FileData,
         page_wordboxes: dict[Page, list[WordBox]],
     ) -> list[dict[str, Any]]:
-        task_queue: Queue = multiprocessing.Queue(maxsize=self._max_processes * 2)
-        result_queue: Queue = multiprocessing.Queue()
+        user_data = user.get(None)
 
-        def worker(task_q: Queue, result_q: Queue):
-            object_storage = make_object_storage()
-            while True:
-                task: PageTask = task_q.get()
-                if task is None:
-                    break
+        def upload_page(
+            page_index: int,
+            image_data: ImageData,
+            wordboxes: list[WordBox],
+            file_name: str,
+        ) -> dict[str, Any]:
+            logger.info(f"Processing page {page_index + 1} of `{file_name}`")
+            user.set(user_data)
 
-                logger.info(
-                    f"[PID={multiprocessing.current_process().pid}] Processing page {task.page_index + 1}"
-                )
+            img_file = FileData(
+                path=self._get_original_image_path(file_name, f"{page_index}.png"),
+                content=image_data.content,
+            )
 
-                img_file = FileData(
-                    path=self._get_original_image_path(
-                        task.file_name, f"{task.page_index}.png"
-                    ),
-                    content=task.image_data.content,
-                )
+            blob_name = self._upload_file_to_storage(img_file)
 
-                blob_name = object_storage.upload(
-                    path=img_file.path,
-                    content=img_file.content,
-                    replace_if_exists=True,
-                )
+            return {
+                "page_index": page_index,
+                "blob_name": blob_name,
+                "width": image_data.shape.width,
+                "height": image_data.shape.height,
+                "wordboxes": self._wordboxes_to_tuples(wordboxes),
+            }
 
-                result_q.put(
-                    {
-                        "page_index": task.page_index,
-                        "blob_name": blob_name,
-                        "width": task.image_data.shape.width,
-                        "height": task.image_data.shape.height,
-                        "wordboxes": self._wordboxes_to_tuples(task.wordboxes),
-                    }
-                )
+        results: list[dict[str, Any]] = []
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=self._max_processes
+        ) as executor:
+            in_flight: set[concurrent.futures.Future] = set()
 
-        # start worker pool
-        workers = [
-            Process(target=worker, args=(task_queue, result_queue))
-            for _ in range(self._max_processes)
-        ]
-        for w in workers:
-            w.start()
-
-        # producer: stream pages lazily
-        with BytesIO(file_data.content) as file_stream:
-            for page_index, image_data in enumerate(
-                PdfToImagesConverter.convert(file=file_stream, dpi=self._target_dpi)
-            ):
-                task_queue.put(
-                    PageTask(
-                        page_index=page_index,
-                        image_data=image_data,
-                        wordboxes=page_wordboxes.get(page_index, []),
-                        file_name=file_data.name,
+            with BytesIO(file_data.content) as file_stream:
+                for page_index, image_data in enumerate(
+                    PdfToImagesConverter.convert(file=file_stream, dpi=self._target_dpi)
+                ):
+                    future = executor.submit(
+                        upload_page,
+                        page_index,
+                        image_data,
+                        page_wordboxes.get(page_index, []),
+                        file_data.name,
                     )
-                )
+                    in_flight.add(future)
 
-        # tell workers to exit
-        for _ in workers:
-            task_queue.put(None)
+                    if len(in_flight) >= self._max_processes:
+                        done, in_flight = concurrent.futures.wait(
+                            in_flight, return_when=concurrent.futures.FIRST_COMPLETED
+                        )
+                        for completed_future in done:
+                            results.append(completed_future.result())
 
-        # collect results
-        results = []
-        total_pages = len(page_wordboxes)
-        finished = 0
-        while finished < total_pages:
-            try:
-                r = result_queue.get()
-                results.append(r)
-                finished += 1
-            except Empty:
-                break
-
-        for w in workers:
-            w.join()
+            for future in concurrent.futures.as_completed(in_flight):
+                results.append(future.result())
 
         return results
 

@@ -2,9 +2,9 @@ from deps_lil_chyn.domain.dto import ContainerType
 
 
 def test_unify_msg(msg_unifier, fake_storage_service):
-    sender = "Palina"
-    cc = ["Palina"]
-    recipients = ["Palina"]
+    sender = "Palina Pashkouskaya1 <Palina_Pashkouskaya1@epam.com>"
+    cc = ["Palina Pashkouskaya1 <Palina_Pashkouskaya1@epam.com>"]
+    recipients = ["Palina Pashkouskaya1 <Palina_Pashkouskaya1@epam.com>"]
     subject = "Test email"
     body = "Test email"
     file_path = "tests/data/test_email.msg"

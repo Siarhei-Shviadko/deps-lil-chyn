@@ -1,12 +1,12 @@
 [submodule "vendors/deps-unified-data"]
 	path = vendors/deps-unified-data
-	url = git@github.com:epam/deps-unified-data.git
+	url = git@github.com:Siarhei-Shviadko/deps-unified-data.git
 [submodule "vendors/deps-observability-instrumentation"]
 	path = vendors/deps-observability-instrumentation
-	url = git@github.com:epam/deps-observability-instrumentation.git
+	url = git@github.com:Siarhei-Shviadko/deps-observability-instrumentation.git
 [submodule "vendors/deps-object-storage"]
 	path = vendors/deps-object-storage
-	url = git@github.com:epam/deps-object-storage.git
+	url = git@github.com:Siarhei-Shviadko/deps-object-storage.git
 [submodule "vendors/deps-message-flow"]
 	path = vendors/deps-message-flow
-	url = git@github.com:epam/deps-message-flow.git
+	url = git@github.com:Siarhei-Shviadko/deps-message-flow.git

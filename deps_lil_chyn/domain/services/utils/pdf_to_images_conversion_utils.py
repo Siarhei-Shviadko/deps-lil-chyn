@@ -23,18 +23,21 @@ def convert_pdf_to_pil_images(
         try:
             for page_index, _ in enumerate(pdf):
                 page = pdf.get_page(page_index)
-                image = page.render_topil(
-                    scale=get_scale_parameter_value(
-                        width=page.get_width(), height=page.get_height(), dpi=dpi
-                    )
-                )
-                dpi_changed_image = change_image_dpi(image, dpi=dpi)
-
                 try:
-                    yield dpi_changed_image
+                    image = page.render_topil(
+                        scale=get_scale_parameter_value(
+                            width=page.get_width(), height=page.get_height(), dpi=dpi
+                        )
+                    )
+                    try:
+                        dpi_changed_image = change_image_dpi(image, dpi=dpi)
+                        try:
+                            yield dpi_changed_image
+                        finally:
+                            dpi_changed_image.close()
+                    finally:
+                        image.close()
                 finally:
-                    dpi_changed_image.close()
-                    image.close()
                     page.close()
 
         finally:

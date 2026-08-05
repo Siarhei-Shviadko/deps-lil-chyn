@@ -1,5 +1,5 @@
 ARG REPOSITORY_URL=""
-FROM ${REPOSITORY_URL}/base/python:3.12.11-slim AS python-base
+FROM ${REPOSITORY_URL:+$REPOSITORY_URL/base/}python:3.12.11-slim AS python-base
 
 ENV PIP_NO_CACHE_DIR=off \
     PYTHONUNBUFFERED=1 \
